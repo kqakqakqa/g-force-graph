@@ -11,6 +11,9 @@
     <svg id="accel-svg" width="300" height="300">
         <circle cx="150" cy="150" r="100" stroke="black" stroke-width="2" fill="none" />
         <line id="accel-line" x1="150" y1="150" x2="150" y2="150" stroke="red" stroke-width="3" />
+        <text id="text-left" x="40" y="155" font-size="16" fill="black"></text>
+        <text id="text-top" x="140" y="40" font-size="16" fill="black"></text>
+        <text id="text-bottom" x="140" y="270" font-size="32" fill="black"></text>
     </svg>
 </body>
 
@@ -28,7 +31,20 @@
     }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/mathjs/lib/browser/math.min.js"></script>
+
 <script>
+    function vectorProjection(a, b) {
+        let dotProduct = math.dot(a, b);
+        let bNormSquared = math.dot(b, b);
+        return math.multiply(b, dotProduct / bNormSquared);
+    }
+
+    function unitVector(v) {
+        const norm = math.norm(v);
+        return norm === 0 ? v : math.divide(v, norm);
+    }
+
     // 归一化处理
     const MAX_ACCEL = 10; // 假设最大加速度 10 m/s²
     const SVG_CENTER = 150;
@@ -53,47 +69,37 @@
 
     function startTracking() {
         window.addEventListener("devicemotion", event => {
-            let ax = event.acceleration.x || 0;
-            let ay = event.acceleration.y || 0;
-            let az = event.acceleration.z || 0;
+            let a = [
+                event.acceleration.x || 0,
+                event.acceleration.y || 0,
+                event.acceleration.z || 0,
+            ];
 
-            let gx = event.accelerationIncludingGravity.x || 0;
-            let gy = event.accelerationIncludingGravity.y || 0;
-            let gz = event.accelerationIncludingGravity.z || 0;
+            let ag = [
+                event.accelerationIncludingGravity.x || 0,
+                event.accelerationIncludingGravity.y || 0,
+                event.accelerationIncludingGravity.z || 0,
+            ];
 
-            // 归一化重力向量
-            let g_length = Math.sqrt(gx * gx + gy * gy + gz * gz);
-            if (g_length === 0) return;
-            gx /= g_length;
-            gy /= g_length;
-            gz /= g_length;
+            let g = math.subtract(ag, a);
 
-            // 任选两个正交的基底向量
-            let basis1 = { x: -gy, y: gx, z: 0 }; // 一个垂直于重力方向的向量
-            let b1_length = Math.sqrt(basis1.x * basis1.x + basis1.y * basis1.y + basis1.z * basis1.z);
-            if (b1_length === 0) return;
-            basis1.x /= b1_length;
-            basis1.y /= b1_length;
-            basis1.z /= b1_length;
+            let aPorjg = vectorProjection(a, g);
 
-            let basis2 = {
-                x: gy * basis1.z - gz * basis1.y,
-                y: gz * basis1.x - gx * basis1.z,
-                z: gx * basis1.y - gy * basis1.x
-            }; // 叉乘得到第二个正交基底
-            let b2_length = Math.sqrt(basis2.x * basis2.x + basis2.y * basis2.y + basis2.z * basis2.z);
-            if (b2_length === 0) return;
-            basis2.x /= b2_length;
-            basis2.y /= b2_length;
-            basis2.z /= b2_length;
+            let aHorizontal = math.subtract(a, aPorjg);
+            const aHorizontalValue = math.norm(aHorizontal);
 
-            // 计算加速度投影
-            let accel1 = ax * basis1.x + ay * basis1.y + az * basis1.z;
-            let accel2 = ax * basis2.x + ay * basis2.y + az * basis2.z;
+            let forwardIndicator = [0, 1, -1];
+            let forwardIndicatorPorjg = vectorProjection(forwardIndicator, g);
+            let forward = math.subtract(forwardIndicator, forwardIndicatorPorjg);
+
+            let right = math.cross(g, forward);
+
+            const aForwardValue = math.norm(vectorProjection(a, forward));
+            const aRightValue = math.norm(vectorProjection(a, right));
 
             // 归一化到SVG坐标
-            let normX = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, accel1)) / MAX_ACCEL;
-            let normY = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, accel2)) / MAX_ACCEL;
+            let normX = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aForwardValue)) / MAX_ACCEL;
+            let normY = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aRightValue)) / MAX_ACCEL;
 
             let svgX = SVG_CENTER + normX * SVG_RADIUS;
             let svgY = SVG_CENTER - normY * SVG_RADIUS; // Y轴方向与屏幕相反
@@ -101,6 +107,9 @@
             let line = document.getElementById("accel-line");
             line.setAttribute("x2", svgX);
             line.setAttribute("y2", svgY);
+            document.getElementById("text-left").textContent = aForwardValue;
+            document.getElementById("text-top").textContent = aRightValue;
+            document.getElementById("text-bottom").textContent = aHorizontalValue;
         });
     }
 
