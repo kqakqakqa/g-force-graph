@@ -25,10 +25,6 @@
         height: 100vh;
         margin: 0;
     }
-
-    svg {
-        border: 1px solid #333;
-    }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/mathjs/lib/browser/math.min.js"></script>
@@ -37,7 +33,7 @@
     function vectorProjection(a, b) {
         let dotProduct = math.dot(a, b);
         let bNormSquared = math.dot(b, b);
-        return math.multiply(b, dotProduct / bNormSquared);
+        return bNormSquared === 0 ? a : math.multiply(b, dotProduct / bNormSquared);
     }
 
     function unitVector(v) {
@@ -74,32 +70,25 @@
                 event.acceleration.y || 0,
                 event.acceleration.z || 0,
             ];
-
             let ag = [
                 event.accelerationIncludingGravity.x || 0,
                 event.accelerationIncludingGravity.y || 0,
                 event.accelerationIncludingGravity.z || 0,
             ];
-
             let g = math.subtract(ag, a);
-
-            let aPorjg = vectorProjection(a, g);
-
-            let aHorizontal = math.subtract(a, aPorjg);
-            const aHorizontalValue = math.norm(aHorizontal);
 
             let forwardIndicator = [0, 1, -1];
             let forwardIndicatorPorjg = vectorProjection(forwardIndicator, g);
-            let forward = math.subtract(forwardIndicator, forwardIndicatorPorjg);
+            let forward = unitVector(math.subtract(forwardIndicator, forwardIndicatorPorjg));
+            let right = unitVector(math.cross(g, forward));
 
-            let right = math.cross(g, forward);
-
-            const aForwardValue = math.norm(vectorProjection(a, forward));
-            const aRightValue = math.norm(vectorProjection(a, right));
+            const aForwardValue = math.dot(a, forward);
+            const aRightValue = math.dot(a, right);
+            const aHorizontalAbsValue = Math.sqrt(aForwardValue * aForwardValue + aRightValue * aRightValue);
 
             // 归一化到SVG坐标
-            let normX = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aForwardValue)) / MAX_ACCEL;
-            let normY = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aRightValue)) / MAX_ACCEL;
+            let normX = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aRightValue)) / MAX_ACCEL;
+            let normY = Math.max(-MAX_ACCEL, Math.min(MAX_ACCEL, aForwardValue)) / MAX_ACCEL;
 
             let svgX = SVG_CENTER + normX * SVG_RADIUS;
             let svgY = SVG_CENTER - normY * SVG_RADIUS; // Y轴方向与屏幕相反
@@ -107,9 +96,10 @@
             let line = document.getElementById("accel-line");
             line.setAttribute("x2", svgX);
             line.setAttribute("y2", svgY);
-            document.getElementById("text-left").textContent = aForwardValue;
-            document.getElementById("text-top").textContent = aRightValue;
-            document.getElementById("text-bottom").textContent = aHorizontalValue;
+            document.getElementById("text-left").textContent = aForwardValue.toFixed(2) + " m/s²";
+            document.getElementById("text-top").textContent = aRightValue.toFixed(2) + " m/s²";
+            document.getElementById("text-bottom").textContent = aHorizontalAbsValue.toFixed(2) + " m/s²";
+
         });
     }
 
